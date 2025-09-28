@@ -1,0 +1,17 @@
+defaults:
+  order: 2
+  max_words: 100
+  corpus: "corpora/default.txt"
+
+model:
+  auto_save: true
+  compression: false
+  format: "yaml"
+
+logging:
+  level: "info"
+  file: null
+
+generation:
+  temperature: 1.0
+  start_with_prompt: true
