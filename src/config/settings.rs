@@ -1,5 +1,6 @@
+use anyhow::Result;
 use serde::Deserialize;
-use std::{fs, path::Path};
+use std::{fs::File, io::BufReader, path::Path};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ModelSettings {
@@ -50,22 +51,42 @@ impl Default for Settings {
 }
 
 impl Settings {
-    pub fn load() -> anyhow::Result<Self> {
-        let config_paths = vec![
-            "config.yaml",
-            "config/default.yaml",
-            "~/.config/promptly/config.yaml",
-        ];
+    /// Load settings from a specific file
+    pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let settings = serde_yaml::from_reader(reader)?;
+        Ok(settings)
+    }
 
-        for path in config_paths {
-            if Path::new(path).exists() {
-                let content = fs::read_to_string(path)?;
-                let settings = serde_yaml::from_str(&content)?;
-                return Ok(settings);
-            }
+    /// Load default.yaml if no explicit config is given
+    pub fn load_default() -> Result<Self> {
+        let path = Path::new("config/default.yaml");
+        if path.exists() {
+            log::info!("Loading default config from {}", path.display());
+            Self::load_from(path)
+        } else {
+            log::warn!("No config/default.yaml found, using built-in defaults");
+            Ok(Self::default())
         }
+    }
 
-        log::warn!("No config file found, using defaults");
-        Ok(Self::default())
+    /// Load settings from an optional path.
+    /// If `Some(path)` is given, loads from that path.
+    /// Otherwise, tries config/default.yaml, and finally falls back to built-in defaults.
+    pub fn load_or_default<P: AsRef<Path>>(path: Option<P>) -> Result<Self> {
+        path.map_or_else(Self::load_default, |p| {
+            let path_ref = p.as_ref();
+            if path_ref.exists() {
+                log::info!("Loading config from {}", path_ref.display());
+                Self::load_from(path_ref)
+            } else {
+                log::warn!(
+                    "Config file {} not found, falling back to default.yaml",
+                    path_ref.display()
+                );
+                Self::load_default()
+            }
+        })
     }
 }

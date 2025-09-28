@@ -1,4 +1,4 @@
-use crate::markov::MarkovChain;
+use crate::markov::{Interner, MarkovChain, chain::State};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,7 +11,8 @@ use thiserror::Error;
 #[derive(Serialize, Deserialize)]
 struct SavedModel {
     pub order: usize,
-    pub transitions: HashMap<Vec<String>, HashMap<String, usize>>,
+    pub interner_words: Vec<String>,
+    pub states: HashMap<Vec<usize>, State>,
 }
 
 #[derive(Error, Debug)]
@@ -29,7 +30,8 @@ pub enum ModelError {
 pub fn save_model<P: AsRef<Path>>(chain: &MarkovChain, path: P) -> Result<(), ModelError> {
     let saved_model = SavedModel {
         order: chain.order,
-        transitions: chain.transitions.clone(),
+        interner_words: chain.interner.id_to_word.clone(),
+        states: chain.states.clone(),
     };
 
     let serialized = serde_yaml::to_string(&saved_model)?;
@@ -46,8 +48,14 @@ pub fn load_model<P: AsRef<Path>>(path: P) -> Result<MarkovChain, ModelError> {
 
     let saved_model: SavedModel = serde_yaml::from_str(&contents)?;
 
+    let mut interner = Interner::new();
+    for word in &saved_model.interner_words {
+        interner.get_or_intern(word);
+    }
+
     Ok(MarkovChain {
         order: saved_model.order,
-        transitions: saved_model.transitions,
+        states: saved_model.states,
+        interner,
     })
 }

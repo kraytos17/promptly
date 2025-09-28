@@ -1,5 +1,6 @@
+use crate::markov::interner::Interner;
 use rand::{Rng, seq::IteratorRandom};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -10,113 +11,159 @@ pub enum GenerationError {
     NoTransitions,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct State {
+    pub next_words: Vec<usize>,
+    pub counts: Vec<usize>,
+    pub cumulative: Vec<usize>,
+    #[serde(skip)]
+    total: usize,
+    #[serde(skip)]
+    next_word_index: HashMap<usize, usize>,
+}
+
+impl State {
+    pub fn new() -> Self {
+        Self {
+            next_words: Vec::new(),
+            counts: Vec::new(),
+            cumulative: Vec::new(),
+            total: 0,
+            next_word_index: HashMap::new(),
+        }
+    }
+
+    pub fn update_cumulative(&mut self) {
+        self.cumulative.clear();
+        self.total = 0;
+        for &cnt in &self.counts {
+            self.total += cnt;
+            self.cumulative.push(self.total);
+        }
+    }
+
+    pub fn increment(&mut self, word: usize) {
+        if let Some(&idx) = self.next_word_index.get(&word) {
+            self.counts[idx] += 1;
+        } else {
+            let idx = self.next_words.len();
+            self.next_words.push(word);
+            self.counts.push(1);
+            self.next_word_index.insert(word, idx);
+        }
+    }
+
+    pub fn select_next(&self, rng: &mut impl Rng) -> Option<usize> {
+        if self.cumulative.is_empty() || self.total == 0 {
+            return None;
+        }
+        let choice = rng.random_range(0..self.total);
+        match self.cumulative.binary_search(&choice) {
+            Ok(idx) | Err(idx) => Some(self.next_words[idx]),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MarkovChain {
     pub order: usize,
-    pub transitions: HashMap<Vec<String>, HashMap<String, usize>>,
+    pub states: HashMap<Vec<usize>, State>,
+    pub interner: Interner,
 }
 
 impl MarkovChain {
     pub fn new(order: usize) -> Self {
         Self {
             order,
-            transitions: HashMap::new(),
+            states: HashMap::new(),
+            interner: Interner::new(),
         }
     }
 
     pub fn train(&mut self, text: &str) {
-        let words: Vec<_> = text.split_whitespace().collect();
+        let words: Vec<_> = text
+            .split_whitespace()
+            .map(|w| self.interner.get_or_intern(w))
+            .collect();
+
         if words.len() <= self.order {
             return;
         }
 
-        for window in words.windows(self.order + 1) {
-            let state: Vec<_> = window[..self.order]
-                .iter()
-                .map(ToString::to_string)
-                .collect();
-            let next_word = window[self.order].to_string();
+        let mut state: VecDeque<usize> = words.iter().take(self.order).copied().collect();
+        for &next_word in &words[self.order..] {
+            let key = state.iter().copied().collect::<Vec<_>>();
+            let node = self.states.entry(key).or_insert_with(State::new);
+            node.increment(next_word);
 
-            *self
-                .transitions
-                .entry(state)
-                .or_default()
-                .entry(next_word)
-                .or_insert(0) += 1;
+            state.pop_front();
+            state.push_back(next_word);
+        }
+
+        for node in self.states.values_mut() {
+            node.update_cumulative();
         }
     }
 
-    pub fn generate(&self, prompt: &str, max_words: usize) -> Result<String, GenerationError> {
-        let mut prompt_words: Vec<String> =
-            prompt.split_whitespace().map(|w| w.to_string()).collect();
+    pub fn generate(&mut self, prompt: &str, max_words: usize) -> Result<String, GenerationError> {
+        let mut rng = rand::rng();
+        let mut state: VecDeque<usize> = prompt
+            .split_whitespace()
+            .map(|w| self.interner.get_or_intern(w))
+            .collect();
 
-        if prompt_words.len() < self.order {
-            let mut rng = rand::rng();
+        if state.len() < self.order {
             let random_state = self
-                .transitions
+                .states
                 .keys()
                 .choose(&mut rng)
                 .ok_or(GenerationError::NoTransitions)?;
-            prompt_words = random_state.clone();
+            state = VecDeque::from(random_state.clone());
         }
 
-        let mut curr_state = if prompt_words.len() >= self.order {
-            prompt_words[prompt_words.len() - self.order..].to_vec()
-        } else {
-            prompt_words.clone()
-        };
+        while state.len() > self.order {
+            state.pop_front();
+        }
 
-        let mut res = prompt_words.join(" ");
+        let mut output: Vec<usize> = state.iter().copied().collect();
         for _ in 0..max_words {
-            let next_word = match self.next_word(&curr_state) {
-                Some(word) => word,
-                None => {
-                    let mut rng = rand::rng();
-                    if let Some(random_state) = self.transitions.keys().choose(&mut rng) {
-                        curr_state = random_state.clone();
-                        continue;
-                    } else {
-                        break;
-                    }
-                }
+            let Some(node) = self.states.get(state.as_slices().0) else {
+                let random_state = self
+                    .states
+                    .keys()
+                    .choose(&mut rng)
+                    .ok_or(GenerationError::NoTransitions)?;
+
+                state = VecDeque::from(random_state.clone());
+                output.extend(state.iter());
+                continue;
             };
 
-            res.push(' ');
-            res.push_str(&next_word);
-
-            if curr_state.len() >= self.order {
-                curr_state.remove(0);
+            let Some(next_word) = node.select_next(&mut rng) else {
+                break;
+            };
+            
+            state.push_back(next_word);
+            if state.len() > self.order {
+                state.pop_front();
             }
-            curr_state.push(next_word);
+
+            output.push(next_word);
         }
 
-        Ok(res)
+        let text = output
+            .into_iter()
+            .map(|id| self.interner.resolve(id))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        Ok(text)
     }
 
-    pub fn next_word(&self, state: &[String]) -> Option<String> {
-        let options = self.transitions.get(state)?;
-        let tot_wt: usize = options.values().sum();
-        if tot_wt == 0 {
-            return None;
-        }
-
-        let mut rng = rand::rng();
-        let mut random_val = rng.random_range(0..tot_wt);
-        for (word, &wt) in options {
-            if random_val < wt {
-                return Some(word.clone());
-            }
-            random_val -= wt;
-        }
-
-        None
-    }
-
-    pub fn get_probability(&self, state: &[String], next_word: &str) -> Option<f64> {
-        let options = self.transitions.get(state)?;
-        let total = options.values().sum::<usize>() as f64;
-        let count = *options.get(next_word)? as f64;
-
-        Some(count / total)
+    pub fn get_probability(&self, state: &[usize], next_word: usize) -> Option<f64> {
+        let node = self.states.get(state)?;
+        let total = node.total;
+        let pos = node.next_word_index.get(&next_word)?;
+        Some(node.counts[*pos] as f64 / total as f64)
     }
 }

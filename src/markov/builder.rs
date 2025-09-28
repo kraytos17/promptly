@@ -16,6 +16,6 @@ pub fn train_from_corpus(corpus_path: &Path, order: usize) -> Result<MarkovChain
     let mut chain = MarkovChain::new(order);
     chain.train(&processed_text);
 
-    log::info!("Training completed. States: {}", chain.transitions.len());
+    log::info!("Training completed. States: {}", chain.states.len());
     Ok(chain)
 }
