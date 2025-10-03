@@ -64,11 +64,60 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MarkovChain {
     pub order: usize,
+    #[serde(with = "vec_key_map")]
     pub states: HashMap<Vec<usize>, State>,
     pub interner: Interner,
+}
+
+pub(crate) mod vec_key_map {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::collections::HashMap;
+
+    pub fn serialize<S>(
+        map: &HashMap<Vec<usize>, super::State>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let string_keyed: HashMap<String, &super::State> = map
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("_"),
+                    v,
+                )
+            })
+            .collect();
+
+        string_keyed.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<HashMap<Vec<usize>, super::State>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let string_keyed = HashMap::<String, super::State>::deserialize(deserializer)?;
+        Ok(string_keyed
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k.split('_')
+                        .map(|s| s.parse().unwrap())
+                        .collect::<Vec<usize>>(),
+                    v,
+                )
+            })
+            .collect())
+    }
 }
 
 impl MarkovChain {
@@ -142,7 +191,7 @@ impl MarkovChain {
             let Some(next_word) = node.select_next(&mut rng) else {
                 break;
             };
-            
+
             state.push_back(next_word);
             if state.len() > self.order {
                 state.pop_front();
@@ -153,17 +202,18 @@ impl MarkovChain {
 
         let text = output
             .into_iter()
-            .map(|id| self.interner.resolve(id))
+            .filter_map(|id| self.interner.resolve(id))
             .collect::<Vec<_>>()
             .join(" ");
 
         Ok(text)
     }
 
-    pub fn get_probability(&self, state: &[usize], next_word: usize) -> Option<f64> {
+    pub fn _get_probability(&self, state: &[usize], next_word: usize) -> Option<f64> {
         let node = self.states.get(state)?;
         let total = node.total;
         let pos = node.next_word_index.get(&next_word)?;
+
         Some(node.counts[*pos] as f64 / total as f64)
     }
 }

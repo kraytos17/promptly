@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Interner {
     pub word_to_id: HashMap<String, usize>,
     pub id_to_word: Vec<String>,
@@ -26,7 +26,7 @@ impl Interner {
         }
     }
 
-    pub fn resolve(&self, id: usize) -> &str {
-        &self.id_to_word[id]
+    pub fn resolve(&self, id: usize) -> Option<&str> {
+        self.id_to_word.get(id).map(|s| s.as_str())
     }
 }

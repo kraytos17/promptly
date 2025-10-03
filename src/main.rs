@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             .expect("Time went backwards")
             .as_secs();
 
-        let auto_path = models_dir.join(format!("model_order_{}_{}.yaml", args.order, timestamp));
+        let auto_path = models_dir.join(format!("model_order_{}_{}.json", args.order, timestamp));
         log::info!("Auto-saving model to: {}", auto_path.display());
         model::save_model(&chain, &auto_path)?;
     }

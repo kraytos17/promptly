@@ -1,9 +1,14 @@
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "promptly")]
 #[command(about = "Offline text generator using Markov chains", long_about = None)]
+#[command(group(
+    ArgGroup::new("corpus_source")
+        .required(false)
+        .args(&["corpus", "corpus_files", "corpus_dir"])
+))]
 pub struct Args {
     /// The prompt to start generation from
     pub prompt: String,
@@ -16,9 +21,17 @@ pub struct Args {
     #[arg(short, long, default_value_t = 2)]
     pub order: usize,
 
-    /// Training corpus file path
+    /// Single training corpus file path
     #[arg(short, long, default_value = "corpora/default.txt")]
     pub corpus: PathBuf,
+
+    /// Multiple training corpus files
+    #[arg(long)]
+    pub corpus_files: Vec<PathBuf>,
+
+    /// Directory containing training corpus files
+    #[arg(long)]
+    pub corpus_dir: Option<PathBuf>,
 
     /// Load a pre-trained model instead of training from corpus
     #[arg(long)]

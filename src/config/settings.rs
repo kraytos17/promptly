@@ -40,7 +40,7 @@ impl Default for Settings {
             model: ModelSettings {
                 auto_save: true,
                 compression: false,
-                format: "yaml".to_string(),
+                format: "json".to_string(),
             },
             logging: LoggingSettings {
                 level: "info".to_string(),
@@ -55,25 +55,25 @@ impl Settings {
     pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let settings = serde_yaml::from_reader(reader)?;
+        let settings = serde_json::from_reader(reader)?;
         Ok(settings)
     }
 
-    /// Load default.yaml if no explicit config is given
+    /// Load default.json if no explicit config is given
     pub fn load_default() -> Result<Self> {
-        let path = Path::new("config/default.yaml");
+        let path = Path::new("config/default.json");
         if path.exists() {
             log::info!("Loading default config from {}", path.display());
             Self::load_from(path)
         } else {
-            log::warn!("No config/default.yaml found, using built-in defaults");
+            log::warn!("No config/default.json found, using built-in defaults");
             Ok(Self::default())
         }
     }
 
     /// Load settings from an optional path.
     /// If `Some(path)` is given, loads from that path.
-    /// Otherwise, tries config/default.yaml, and finally falls back to built-in defaults.
+    /// Otherwise, tries config/default.json, and finally falls back to built-in defaults.
     pub fn load_or_default<P: AsRef<Path>>(path: Option<P>) -> Result<Self> {
         path.map_or_else(Self::load_default, |p| {
             let path_ref = p.as_ref();
@@ -82,7 +82,7 @@ impl Settings {
                 Self::load_from(path_ref)
             } else {
                 log::warn!(
-                    "Config file {} not found, falling back to default.yaml",
+                    "Config file {} not found, falling back to default.json",
                     path_ref.display()
                 );
                 Self::load_default()
