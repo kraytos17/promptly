@@ -1,28 +1,37 @@
-use anyhow::Result;
 use serde::Deserialize;
-use std::{fs::File, io::BufReader, path::Path};
+use std::{fs, path::Path};
+use thiserror::Error;
 
-#[derive(Debug, Deserialize, Clone)]
+/// Use thiserror to simplify error definitions
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ModelSettings {
     pub auto_save: bool,
     pub compression: bool,
     pub format: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct LoggingSettings {
     pub level: String,
     pub file: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct DefaultSettings {
     pub order: usize,
     pub max_words: usize,
     pub corpus: String,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct Settings {
     pub defaults: DefaultSettings,
     pub model: ModelSettings,
@@ -52,15 +61,14 @@ impl Default for Settings {
 
 impl Settings {
     /// Load settings from a specific file
-    pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let settings = serde_json::from_reader(reader)?;
+    pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+        let content = fs::read_to_string(path)?;
+        let settings = serde_json::from_str(&content)?;
         Ok(settings)
     }
 
     /// Load default.json if no explicit config is given
-    pub fn load_default() -> Result<Self> {
+    pub fn load_default() -> Result<Self, ConfigError> {
         let path = Path::new("config/default.json");
         if path.exists() {
             log::info!("Loading default config from {}", path.display());
@@ -74,19 +82,19 @@ impl Settings {
     /// Load settings from an optional path.
     /// If `Some(path)` is given, loads from that path.
     /// Otherwise, tries config/default.json, and finally falls back to built-in defaults.
-    pub fn load_or_default<P: AsRef<Path>>(path: Option<P>) -> Result<Self> {
-        path.map_or_else(Self::load_default, |p| {
+    pub fn load_or_default<P: AsRef<Path>>(path: Option<P>) -> Result<Self, ConfigError> {
+        if let Some(p) = path {
             let path_ref = p.as_ref();
             if path_ref.exists() {
                 log::info!("Loading config from {}", path_ref.display());
-                Self::load_from(path_ref)
-            } else {
-                log::warn!(
-                    "Config file {} not found, falling back to default.json",
-                    path_ref.display()
-                );
-                Self::load_default()
+                return Self::load_from(path_ref);
             }
-        })
+
+            log::warn!(
+                "Config file {} not found, falling back to default.json",
+                path_ref.display()
+            );
+        }
+        Self::load_default()
     }
 }

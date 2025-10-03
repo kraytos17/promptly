@@ -5,10 +5,8 @@ use thiserror::Error;
 pub enum CorpusError {
     #[error("File not found: {0}")]
     FileNotFound(String),
-
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-
     #[error("Invalid encoding")]
     InvalidEncoding,
 }

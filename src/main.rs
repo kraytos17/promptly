@@ -5,7 +5,6 @@ mod logger;
 mod markov;
 mod model;
 
-use anyhow::Result;
 use clap::Parser;
 use cli::Args;
 use config::Settings;
@@ -14,8 +13,31 @@ use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error;
 
-fn main() -> Result<()> {
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("Config error: {0}")]
+    Config(#[from] config::ConfigError),
+    #[error("Corpus error: {0}")]
+    Corpus(#[from] corpus::CorpusError),
+    #[error("Model error: {0}")]
+    Model(#[from] model::ModelError),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Logger setup failed")]
+    Logger,
+    #[error("Generation failed : {0}")]
+    Generation(#[from] markov::GenerationError),
+}
+
+impl From<log::SetLoggerError> for AppError {
+    fn from(_: log::SetLoggerError) -> Self {
+        Self::Logger
+    }
+}
+
+fn main() -> Result<(), AppError> {
     let args = Args::parse();
     let settings = Settings::load_default()?;
     logger::init_logger(&settings.logging).expect("Can't init the logger");
