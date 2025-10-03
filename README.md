@@ -45,7 +45,7 @@ Options:
 - `-c, --corpus <PATH>`: Training corpus file (default: corpora/default.txt)
 - `--model <PATH>`: Load a pre-trained model instead of training
 - `--save-model <PATH>`: Save the trained model to the given path
-- `-v, --verbose`: No-op (use RUST_LOG for log level)
+- `-v, --verbose`: No-op
 
 Notes:
 - If `--model` is provided, the corpus is not used for training.
@@ -53,8 +53,8 @@ Notes:
 
 Logging (recommended):
 ```sh
-RUST_LOG=info promptly -c corpora/default.txt "start prompt"
-RUST_LOG=debug promptly -o 3 "inspect behavior"
+promptly -c corpora/default.txt "start prompt"
+promptly -o 3 "inspect behavior"
 ```
 
 ## Features
@@ -62,7 +62,7 @@ RUST_LOG=debug promptly -o 3 "inspect behavior"
 - Generate text from a prompt or back off to a random state if needed.
 - Save/load trained models as json.
 - Optional auto-save of trained models via config when not loading an existing model.
-- Logging via `env_logger` and `log`.
+- Logging via `log`, using a custom `SimpleLogger` type.
 
 ## Configuration
 All configuration files live in the config/ directory.
@@ -91,7 +91,7 @@ model:
 
 logging:
   level: info
-  file:
+  file: log_test.json
 ```
 
 Behavior:

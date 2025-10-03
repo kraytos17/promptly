@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod corpus;
+mod logger;
 mod markov;
 mod model;
 
@@ -15,11 +16,9 @@ use std::{
 };
 
 fn main() -> Result<()> {
-    env_logger::init();
-    log::info!("Starting Promptly");
-
     let args = Args::parse();
     let settings = Settings::load_default()?;
+    logger::init_logger(&settings.logging).expect("Can't init the logger");
     log::debug!("Configuration loaded: {settings:?}");
 
     let mut chain = if let Some(model_path) = &args.model {

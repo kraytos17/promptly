@@ -1,0 +1,6 @@
+{
+  "defaults": { "order": 2, "max_words": 300, "corpus": "corpora/default.txt" },
+  "model": { "auto_save": true, "compression": false, "format": "json" },
+  "logging": { "level": "info", "file": "log_test.log" },
+  "generation": { "temperature": 1.0, "start_with_prompt": true }
+}

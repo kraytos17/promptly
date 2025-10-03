@@ -72,7 +72,7 @@ pub struct MarkovChain {
     pub interner: Interner,
 }
 
-pub(crate) mod vec_key_map {
+pub mod vec_key_map {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::collections::HashMap;
 

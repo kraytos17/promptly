@@ -27,6 +27,6 @@ impl Interner {
     }
 
     pub fn resolve(&self, id: usize) -> Option<&str> {
-        self.id_to_word.get(id).map(|s| s.as_str())
+        self.id_to_word.get(id).map(String::as_str)
     }
 }
