@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, path::Path};
+use std::{fs, path::Path};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,9 +16,8 @@ pub fn load_text(path: &Path) -> Result<String, CorpusError> {
         return Err(CorpusError::FileNotFound(path.display().to_string()));
     }
 
-    let mut file = File::open(path)?;
     let mut content = String::new();
-    file.read_to_string(&mut content)?;
+    fs::read_to_string(&mut content)?;
 
     Ok(content)
 }
