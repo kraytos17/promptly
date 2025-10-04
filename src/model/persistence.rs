@@ -46,7 +46,6 @@ pub fn load_model<P: AsRef<Path>>(path: P) -> Result<MarkovChain, ModelError> {
     file.read_to_string(&mut contents)?;
 
     let saved_model: SavedModel = serde_json::from_str(&contents)?;
-
     let mut interner = Interner::new();
     for word in &saved_model.interner_words {
         interner.get_or_intern(word);

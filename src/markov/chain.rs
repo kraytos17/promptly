@@ -57,6 +57,7 @@ impl State {
         if self.cumulative.is_empty() || self.total == 0 {
             return None;
         }
+        
         let choice = rng.random_range(0..self.total);
         match self.cumulative.binary_search(&choice) {
             Ok(idx) | Err(idx) => Some(self.next_words[idx]),

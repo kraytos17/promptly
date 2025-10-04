@@ -1,5 +1,8 @@
 use serde::Deserialize;
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 /// Use thiserror to simplify error definitions
@@ -64,37 +67,42 @@ impl Settings {
     pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
         let content = fs::read_to_string(path)?;
         let settings = serde_json::from_str(&content)?;
+        
         Ok(settings)
     }
 
     /// Load default.json if no explicit config is given
     pub fn load_default() -> Result<Self, ConfigError> {
-        let path = Path::new("config/default.json");
-        if path.exists() {
-            log::info!("Loading default config from {}", path.display());
-            Self::load_from(path)
-        } else {
-            log::warn!("No config/default.json found, using built-in defaults");
-            Ok(Self::default())
-        }
+        Self::load_from("config/default.json").or_else(|err| {
+            if let ConfigError::Io(io_err) = &err
+                && io_err.kind() == std::io::ErrorKind::NotFound
+            {
+                log::warn!("No config/default.json found, using built-in defaults");
+                return Ok(Self::default());
+            }
+
+            Err(err)
+        })
     }
 
     /// Load settings from an optional path.
     /// If `Some(path)` is given, loads from that path.
     /// Otherwise, tries config/default.json, and finally falls back to built-in defaults.
     pub fn load_or_default<P: AsRef<Path>>(path: Option<P>) -> Result<Self, ConfigError> {
-        if let Some(p) = path {
-            let path_ref = p.as_ref();
-            if path_ref.exists() {
-                log::info!("Loading config from {}", path_ref.display());
-                return Self::load_from(path_ref);
-            }
+        path.map_or_else(Self::load_default, |p| {
+            let pb: PathBuf = p.as_ref().into();
+            if pb.exists() {
+                log::info!("Loading config from {}", pb.display());
 
-            log::warn!(
-                "Config file {} not found, falling back to default.json",
-                path_ref.display()
-            );
-        }
-        Self::load_default()
+                Self::load_from(pb)
+            } else {
+                log::warn!(
+                    "Config file {} not found, falling back to default.json",
+                    pb.display()
+                );
+
+                Self::load_default()
+            }
+        })
     }
 }
