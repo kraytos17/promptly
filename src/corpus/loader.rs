@@ -16,8 +16,7 @@ pub fn load_text(path: &Path) -> Result<String, CorpusError> {
         return Err(CorpusError::FileNotFound(path.display().to_string()));
     }
 
-    let mut content = String::new();
-    fs::read_to_string(&mut content)?;
+    let content = fs::read_to_string(path)?;
 
     Ok(content)
 }
